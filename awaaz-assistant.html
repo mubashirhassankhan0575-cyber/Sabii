@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Awaaz Assistant</title>
+<style>
+  :root{
+    --bg: #0a1420;
+    --bg-panel: #101f30;
+    --accent: #35e0c8;
+    --accent-dim: rgba(53,224,200,0.15);
+    --warn: #ffb15c;
+    --text: #e9f2f5;
+    --text-dim: #7d92a0;
+    --border: #1c3245;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  body{
+    display:flex; flex-direction:column; align-items:center;
+    padding:env(safe-area-inset-top,20px) 20px env(safe-area-inset-bottom,20px);
+    min-height:100%;
+  }
+  header{ width:100%; max-width:480px; text-align:center; padding:28px 0 8px; }
+  header h1{
+    font-size:22px; font-weight:600; letter-spacing:0.3px; margin:0;
+  }
+  header p{ color:var(--text-dim); font-size:13px; margin:6px 0 0; }
+
+  .lang-row{ width:100%; max-width:480px; display:flex; justify-content:center; gap:8px; margin:14px 0; }
+  select{
+    background:var(--bg-panel); color:var(--text); border:1px solid var(--border);
+    border-radius:8px; padding:8px 10px; font-size:13px;
+  }
+
+  .mic-wrap{ position:relative; width:180px; height:180px; margin:28px 0 18px; }
+  .ring{
+    position:absolute; inset:0; border-radius:50%;
+    border:2px solid var(--accent-dim);
+    transition:transform .4s ease, opacity .4s ease;
+  }
+  .ring.active{ animation: pulse 1.4s ease-out infinite; }
+  @keyframes pulse{
+    0%{ transform:scale(0.85); opacity:.9; }
+    100%{ transform:scale(1.35); opacity:0; }
+  }
+  button#mic{
+    position:absolute; inset:20px; border-radius:50%; border:none; cursor:pointer;
+    background:radial-gradient(circle at 35% 30%, var(--accent), #0d8f7f);
+    color:#04231e; font-size:15px; font-weight:600;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 1px var(--border), 0 10px 30px rgba(53,224,200,0.25);
+  }
+  button#mic:active{ transform:scale(0.97); }
+
+  .status{ min-height:20px; font-size:13px; color:var(--text-dim); margin-bottom:6px; }
+  .transcript{
+    width:100%; max-width:480px; min-height:24px; text-align:center;
+    font-size:16px; margin-bottom:18px; padding:0 12px;
+  }
+
+  form#type-row{ width:100%; max-width:480px; display:flex; gap:8px; margin-bottom:22px; }
+  form#type-row input{
+    flex:1; background:var(--bg-panel); border:1px solid var(--border); color:var(--text);
+    border-radius:10px; padding:12px 14px; font-size:14px; outline:none;
+  }
+  form#type-row button{
+    background:var(--accent); border:none; color:#04231e; font-weight:600;
+    border-radius:10px; padding:0 18px; font-size:14px; cursor:pointer;
+  }
+
+  .log{ width:100%; max-width:480px; flex:1; }
+  .log h2{ font-size:12px; text-transform:none; color:var(--text-dim); font-weight:500; margin:0 0 10px; }
+  .entry{
+    background:var(--bg-panel); border:1px solid var(--border); border-radius:10px;
+    padding:12px 14px; margin-bottom:8px; font-size:13.5px; line-height:1.45;
+  }
+  .entry .cmd{ color:var(--text); }
+  .entry .resp{ color:var(--accent); margin-top:4px; }
+  .entry .warn{ color:var(--warn); margin-top:4px; }
+  .empty{ color:var(--text-dim); font-size:13px; text-align:center; padding:30px 0; }
+
+  footer{ width:100%; max-width:480px; text-align:center; padding:18px 0 8px; }
+  footer p{ color:var(--text-dim); font-size:11.5px; line-height:1.5; margin:0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Awaaz Assistant</h1>
+  <p>Bolo ya likho — app kholne aur search karne ke liye</p>
+</header>
+
+<div class="lang-row">
+  <select id="lang">
+    <option value="en-US">English</option>
+    <option value="ur-PK">اردو</option>
+    <option value="hi-IN">हिन्दी</option>
+  </select>
+</div>
+
+<div class="mic-wrap">
+  <div class="ring" id="ring"></div>
+  <button id="mic" type="button">Bolo</button>
+</div>
+<div class="status" id="status">Tap kar ke bolo</div>
+<div class="transcript" id="transcript"></div>
+
+<form id="type-row">
+  <input id="typed" type="text" placeholder="Ya yahan likho, jaise: search F1 cars" />
+  <button type="submit">Bhejo</button>
+</form>
+
+<div class="log">
+  <h2>Recent commands</h2>
+  <div id="entries"><div class="empty">Abhi koi command nahi chali</div></div>
+</div>
+
+<footer>
+  <p>Ye tab kaam karta hai jab mic permission mile aur internet ho. Wrapped APK mein mic band ho to isi page ko Chrome mein khol kar "Add to Home screen" karo.</p>
+</footer>
+
+<script>
+(function(){
+  const micBtn = document.getElementById('mic');
+  const ring = document.getElementById('ring');
+  const statusEl = document.getElementById('status');
+  const transcriptEl = document.getElementById('transcript');
+  const entriesEl = document.getElementById('entries');
+  const langSel = document.getElementById('lang');
+  const typeForm = document.getElementById('type-row');
+  const typedInput = document.getElementById('typed');
+
+  let firstEntry = true;
+
+  function addEntry(cmd, resp, isWarn){
+    if(firstEntry){ entriesEl.innerHTML = ''; firstEntry = false; }
+    const div = document.createElement('div');
+    div.className = 'entry';
+    div.innerHTML = '<div class="cmd">"' + cmd + '"</div><div class="' + (isWarn ? 'warn' : 'resp') + '">' + resp + '</div>';
+    entriesEl.prepend(div);
+  }
+
+  function speak(text){
+    try{
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = langSel.value;
+      window.speechSynthesis.speak(u);
+    }catch(e){}
+  }
+
+  function openUrl(url){
+    window.open(url, '_blank');
+  }
+
+  // command patterns: [regex to match whole utterance, handler]
+  const OPEN_SITES = [
+    { test: /\b(youtube|yt)\b/i, url: 'https://www.youtube.com', name: 'YouTube' },
+    { test: /\b(maps?|naksha)\b/i, url: 'https://maps.google.com', name: 'Maps' },
+    { test: /\b(gmail|email)\b/i, url: 'https://mail.google.com', name: 'Gmail' },
+    { test: /\bwhatsapp\b/i, url: 'https://web.whatsapp.com', name: 'WhatsApp' },
+    { test: /\b(wikipedia|wiki)\b/i, url: 'https://en.wikipedia.org', name: 'Wikipedia' },
+    { test: /\b(amazon)\b/i, url: 'https://www.amazon.com', name: 'Amazon' },
+    { test: /\b(facebook|fb)\b/i, url: 'https://www.facebook.com', name: 'Facebook' },
+    { test: /\b(instagram|insta)\b/i, url: 'https://www.instagram.com', name: 'Instagram' },
+    { test: /\b(twitter|\bx\b)\b/i, url: 'https://www.twitter.com', name: 'Twitter/X' },
+  ];
+
+  const OPEN_TRIGGER = /^(open|khol|kholo|kholna)\b/i;
+  const SEARCH_TRIGGER = /^(search|dhoondo|dhundo|dhundho|find|google)\b/i;
+
+  function runCommand(raw){
+    const text = raw.trim();
+    if(!text) return;
+    transcriptEl.textContent = text;
+
+    // 1) explicit "open <site>" or bare site name
+    for(const site of OPEN_SITES){
+      if(site.test.test(text)){
+        openUrl(site.url);
+        const resp = site.name + ' khol raha hoon';
+        speak(resp);
+        addEntry(text, resp);
+        return;
+      }
+    }
+
+    // 2) explicit search/open trigger word -> strip it, search the rest
+    let query = text;
+    if(SEARCH_TRIGGER.test(text)){
+      query = text.replace(SEARCH_TRIGGER, '').trim();
+    } else if(OPEN_TRIGGER.test(text)){
+      query = text.replace(OPEN_TRIGGER, '').trim();
+    }
+    if(!query) query = text;
+
+    openUrl('https://www.google.com/search?q=' + encodeURIComponent(query));
+    const resp = '"' + query + '" search kar raha hoon';
+    speak(resp);
+    addEntry(text, resp);
+  }
+
+  typeForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    const v = typedInput.value;
+    typedInput.value = '';
+    runCommand(v);
+  });
+
+  // Speech recognition
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognizing = false;
+  let recognition = null;
+
+  if(SR){
+    recognition = new SR();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    recognition.onstart = function(){
+      recognizing = true;
+      ring.classList.add('active');
+      micBtn.textContent = 'Sun raha';
+      statusEl.textContent = 'Bolo...';
+    };
+    recognition.onresult = function(event){
+      let text = '';
+      for(let i = 0; i < event.results.length; i++){
+        text += event.results[i][0].transcript;
+      }
+      transcriptEl.textContent = text;
+      if(event.results[event.results.length - 1].isFinal){
+        runCommand(text);
+      }
+    };
+    recognition.onerror = function(event){
+      statusEl.textContent = 'Mic error: ' + event.error + ' — neeche type kar sakte ho';
+    };
+    recognition.onend = function(){
+      recognizing = false;
+      ring.classList.remove('active');
+      micBtn.textContent = 'Bolo';
+      statusEl.textContent = 'Tap kar ke bolo';
+    };
+
+    micBtn.addEventListener('click', function(){
+      if(recognizing){
+        recognition.stop();
+        return;
+      }
+      recognition.lang = langSel.value;
+      try{
+        recognition.start();
+      }catch(e){
+        statusEl.textContent = 'Mic start nahi hua, dobara try karo';
+      }
+    });
+  } else {
+    micBtn.disabled = true;
+    micBtn.style.opacity = '0.5';
+    statusEl.textContent = 'Is browser mein mic support nahi — neeche type karo';
+  }
+})();
+</script>
+
+</body>
+</html>
